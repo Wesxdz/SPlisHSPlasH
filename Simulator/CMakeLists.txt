@@ -50,6 +50,7 @@ set(PBDWRAPPER_HEADER_FILES
 set(EXPORTER_SOURCE_FILES
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/ParticleExporter_Partio.cpp
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/ParticleExporter_VTK.cpp
+	${PROJECT_SOURCE_DIR}/Simulator/Exporter/ParticleExporter_OpenVDB.cpp
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/RigidBodyExporter_BIN.cpp
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/RigidBodyExporter_OBJ.cpp
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/RigidBodyExporter_PLY.cpp
@@ -60,6 +61,7 @@ set(EXPORTER_HEADER_FILES
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/ExporterBase.h
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/ParticleExporter_Partio.h
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/ParticleExporter_VTK.h
+	${PROJECT_SOURCE_DIR}/Simulator/Exporter/ParticleExporter_OpenVDB.h
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/RigidBodyExporter_BIN.h
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/RigidBodyExporter_OBJ.h
 	${PROJECT_SOURCE_DIR}/Simulator/Exporter/RigidBodyExporter_PLY.h
