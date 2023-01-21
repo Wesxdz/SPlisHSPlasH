@@ -3,13 +3,14 @@
 #include <Utilities/FileSystem.h>
 #include "SPlisHSPlasH/Simulation.h"
 
-using namespace OpenVDB;
+using namespace SPH;
 using namespace Utilities;
 
 ParticleExporter_OpenVDB::ParticleExporter_OpenVDB(SimulatorBase *base) :
 	ExporterBase(base)
 {
 	m_outfile = nullptr;
+	openvdb::initialize();
 }
 
 ParticleExporter_OpenVDB::~ParticleExporter_OpenVDB(void)
@@ -23,9 +24,6 @@ void ParticleExporter_OpenVDB::init(const std::string& outputPath)
 
 void ParticleExporter_OpenVDB::step(const unsigned int frame)
 {
-	if (!m_active)
-		return;
-
 	Simulation* sim = Simulation::getCurrent();
 	for (unsigned int i = 0; i < sim->numberOfFluidModels(); i++)
 	{
@@ -35,7 +33,7 @@ void ParticleExporter_OpenVDB::step(const unsigned int frame)
 		{
 			fileName = fileName + "_" + model->getId() + "_" + std::to_string(frame);
 			std::string exportFileName = FileSystem::normalizePath(m_exportPath + "/" + fileName);
-			writeParticles(exportFileName + ".vtk", model);
+			writeParticles(exportFileName + ".vdb", model);
 		}
 		else
 		{
@@ -44,7 +42,7 @@ void ParticleExporter_OpenVDB::step(const unsigned int frame)
 			{
 				std::string fileName2 = fileName + "_" + model->getId() + "_" + std::to_string(j) + "_" + std::to_string(frame);
 				std::string exportFileName = FileSystem::normalizePath(m_exportPath + "/" + fileName2);
-				writeParticles(exportFileName + ".vtk", model, j);
+				writeParticles(exportFileName + ".vdb", model, j);
 			}
 		}
 	}
@@ -58,55 +56,56 @@ void ParticleExporter_OpenVDB::setActive(const bool active)
 {
 	ExporterBase::setActive(active);
 	if (m_active)
-		FileSystem::makeDirs(m_exportPath);
-}
-
-void ParticleExporter_OpenVDB::createParticleFile(const std::string& fileName, FluidModel* model)
-{
-	// Open the file
-	m_outfile = new std::ofstream(fileName, std::ios::binary);
-	if (!m_outfile->is_open())
 	{
-		LOG_WARN << "Cannot open a file to save VTK particles.";
-		return;
+		FileSystem::makeDirs(m_exportPath);
 	}
-
-	*m_outfile << "# vtk DataFile Version 4.1\n";
-	*m_outfile << "SPlisHSPlasH particle data\n"; // title of the data set, (any string up to 256 characters+\n)
-	*m_outfile << "BINARY\n";
-	*m_outfile << "DATASET UNSTRUCTURED_GRID\n";
-
-	// add attributes
-	m_attributes.clear();
-	StringTools::tokenize(m_base->getValue<std::string>(SimulatorBase::PARTICLE_EXPORT_ATTRIBUTES), m_attributes, ";");
-
-
-	//////////////////////////////////////////////////////////////////////////
-	// positions and ids exported anyways
-	m_attributes.erase(
-		std::remove_if(m_attributes.begin(), m_attributes.end(), [](const std::string& s) { return (s == "position" || s == "id"); }),
-		m_attributes.end());
 }
-
 
 void ParticleExporter_OpenVDB::writeParticles(const std::string& fileName, FluidModel* model, const unsigned int objId)
 {
-#ifdef USE_DOUBLE
-	const char* real_str = " double\n";
-#else 
-	const char* real_str = " float\n";
-#endif
+// #ifdef USE_DOUBLE
+// 	std::unordered_map<std::string, openvdb::DoubleGrid::Ptr> scalarGrids;
+// #else
+// 	std::unordered_map<std::string, openvdb::FloatGrid::Ptr> scalarGrids;
+// #endif
+// 	std::unordered_map<std::string, openvdb::Int32Grid::Ptr> intGrids;
+// 	std::unordered_map<std::string, openvdb::VectorGrid::Ptr> vectorGrids;
+
+// 	for (unsigned int j = 0; j < model->numberOfFields(); j++)
+// 	{
+// 		const FieldDescription& field = model->getField(j);
+// 		if (field.type == Scalar) // density
+// 		{
+// #ifdef USE_DOUBLE
+// 			openvdb::DoubleGrid::Ptr grid = openvdb::DoubleGrid::create();
+// #else
+// 			openvdb::FloatGrid::Ptr grid = openvdb::FloatGrid::create();
+// #endif
+// 			grid->setName(field.name);
+// 			scalarGrids[field.name] = grid;
+// 		} 
+// 		else if (field.type == UInt) // id
+// 		{
+// 			openvdb::Int32Grid::Ptr grid = openvdb::Int32Grid::create();
+// 			grid->setName(field.name);
+// 			intGrids[field.name] = grid;
+// 		}
+// 		else if (field.type == Vector3) // velocity -> Blender color/temperature
+// 		{
+// 			openvdb::VectorGrid::Ptr grid = openvdb::VectorGrid::create();
+// 			grid->setName(field.name);
+// 			vectorGrids[field.name] = grid;
+// 		}
+// 	}
+
+	openvdb::FloatGrid::Ptr testGrid = openvdb::FloatGrid::create(0.0f);
+	// testGrid->setTransform(openvdb::Transform::UniformScale)
+	testGrid->setName("density");
+	openvdb::math::Transform::Ptr linearTransform = openvdb::math::Transform::createLinearTransform(0.01f);
+	// TODO: Also rotate to Blender's space
+	openvdb::FloatGrid::Accessor accessor = testGrid->getAccessor();
 
 	const unsigned int numParticles = model->numActiveParticles();
-
-	std::vector<Vector3r> positions;
-	positions.reserve(numParticles);
-	std::vector<Eigen::Vector2i> cells;
-	cells.reserve(numParticles);
-	std::vector<int> cellTypes;
-	cellTypes.reserve(numParticles);
-	std::vector<unsigned int> attrData;
-	attrData.reserve(numParticles);
 
 	unsigned int counter = 0;
 	for (unsigned int i = 0; i < numParticles; i++)
@@ -114,154 +113,30 @@ void ParticleExporter_OpenVDB::writeParticles(const std::string& fileName, Fluid
 		if ((objId != 0xffffffff) && (model->getObjectId(i) != objId))
 			continue;
 
-		//////////////////////////////////////////////////////////////////////////
-		// export position attribute as POINTS
-		{
-			positions.push_back(model->getPosition(i));
-			// swap endianess
-			for (unsigned int c = 0; c < 3; c++)
-				swapByteOrder(&positions[positions.size()-1][c]);
-		}
+		const Vector3r& simPos = model->getPosition(i);
+		openvdb::Vec3f worldSpacePoint(simPos[0], simPos[1], simPos[2]);
+		openvdb::Vec3f indexSpacePoint = linearTransform->worldToIndex(worldSpacePoint);
+		openvdb::Coord xyz((int32_t)indexSpacePoint.x(), (int32_t)indexSpacePoint.y(), (int32_t)indexSpacePoint.z());
+		int id = model->getParticleId(i);
 
-		//////////////////////////////////////////////////////////////////////////
-		// export particle IDs as CELLS
-		{
-			unsigned int nodes_per_cell_swapped = 1;
-			swapByteOrder(&nodes_per_cell_swapped);
-			unsigned int idSwapped = counter++;
-			swapByteOrder(&idSwapped);
-			cells.push_back({ nodes_per_cell_swapped, idSwapped });
-		}
-		//////////////////////////////////////////////////////////////////////////
-		// export cell types
-		{
-			// the type of a particle cell is always 1
-			int cellTypeSwapped = 1;
-			swapByteOrder(&cellTypeSwapped);
-			cellTypes.push_back(cellTypeSwapped);
-		}
+		// TODO: Set field grid values
+		// for (auto& field : model->getFields())
+		// {
+		// 	if (field.type == FieldType::Scalar)
+		// 	{
 
-		//////////////////////////////////////////////////////////////////////////
-		// write additional attributes as per-particle data
-		{
-			unsigned int id = model->getParticleId(i);
-			swapByteOrder(&id);
-			attrData.push_back(id);
-		}
+		// 	} 
+		// 	else if (field.type == FieldType::UInt)
+		// 	{
+
+		// 	} else if (field.type == FieldType::Vector3)
+		// 	{
+
+		// 	}
+		// }
+
+		accessor.setValue(xyz, 1.0);
 	}
 
-	createParticleFile(fileName, model);
-
-	if (m_outfile != nullptr)
-	{
-		// export to vtk
-		const unsigned int nPoints = (unsigned int) positions.size();
-		*m_outfile << "POINTS " << nPoints << real_str;
-		m_outfile->write(reinterpret_cast<char*>(positions[0].data()), 3 * nPoints * sizeof(Real));
-		*m_outfile << "\n";
-
-		// particles are cells with one element and the index of the particle
-		*m_outfile << "CELLS " << nPoints << " " << 2 * nPoints << "\n";
-		m_outfile->write(reinterpret_cast<char*>(cells[0].data()), 2 * nPoints * sizeof(unsigned int));
-		*m_outfile << "\n";
-
-		*m_outfile << "CELL_TYPES " << nPoints << "\n";
-		m_outfile->write(reinterpret_cast<char*>(cellTypes.data()), nPoints * sizeof(int));
-		*m_outfile << "\n";
-
-		*m_outfile << "POINT_DATA " << nPoints << "\n";
-		// write IDs
-		*m_outfile << "SCALARS id unsigned_int 1\n";
-		*m_outfile << "LOOKUP_TABLE id_table\n";
-		m_outfile->write(reinterpret_cast<char*>(attrData.data()), nPoints * sizeof(unsigned int));
-		*m_outfile << "\n";
-
-
-
-		//////////////////////////////////////////////////////////////////////////
-		// per point fields (all attributes except for positions)
-		const auto numFields = m_attributes.size();
-		*m_outfile << "FIELD FieldData " << std::to_string(numFields) << "\n";
-
-		// iterate over attributes
-		for (const std::string& a : m_attributes)
-		{
-			const FieldDescription& field = model->getField(a);
-
-			std::string attrNameVTK;
-			std::regex_replace(std::back_inserter(attrNameVTK), a.begin(), a.end(), std::regex("\\s+"), "_");
-
-			if (field.type == FieldType::Scalar)
-			{
-				// write header information
-				*m_outfile << attrNameVTK << " 1 " << nPoints << real_str;
-
-				// copy data
-				std::vector<Real> attrData;
-				attrData.reserve(nPoints);
-				for (unsigned int i = 0u; i < numParticles; i++)
-				{
-					if ((objId != 0xffffffff) && (model->getObjectId(i) != objId))
-						continue;
-					Real val = *((Real*)field.getFct(i));
-					swapByteOrder(&val);		// swap endianess
-					attrData.emplace_back(val);
-				}
-
-				// export to vtk
-				m_outfile->write(reinterpret_cast<char*>(attrData.data()), nPoints * sizeof(Real));
-			}
-			else if (field.type == FieldType::Vector3)
-			{
-				// write header information
-				*m_outfile << attrNameVTK << " 3 " << nPoints << real_str;
-
-				// copy from partio data
-				std::vector<Vector3r> attrData;
-				attrData.reserve(nPoints);
-				for (unsigned int i = 0u; i < numParticles; i++)
-				{
-					if ((objId != 0xffffffff) && (model->getObjectId(i) != objId))
-						continue;
-					Vector3r val((Real*)field.getFct(i));
-					for (unsigned int c = 0; c < 3; c++)
-						swapByteOrder(&val[c]);		// swap endianess
-					attrData.emplace_back(val);
-				}
-				// export to vtk
-				m_outfile->write(reinterpret_cast<char*>(attrData[0].data()), 3 * nPoints * sizeof(Real));
-			}
-			else if (field.type == FieldType::UInt)
-			{
-				// write header information
-				*m_outfile << attrNameVTK << " 1 " << nPoints << " unsigned_int\n";
-
-				// copy data
-				std::vector<unsigned int> attrData;
-				attrData.reserve(nPoints);
-				for (unsigned int i = 0u; i < numParticles; i++)
-				{
-					if ((objId != 0xffffffff) && (model->getObjectId(i) != objId))
-						continue;
-					unsigned int val = *((unsigned int*)field.getFct(i));
-					swapByteOrder(&val);		// swap endianess
-					attrData.emplace_back(val);
-				}
-				// export to vtk
-				m_outfile->write(reinterpret_cast<char*>(attrData.data()), nPoints * sizeof(unsigned int));
-			}
-			// TODO support other field types
-			else
-			{
-				LOG_WARN << "Skipping attribute " << a << ", because it is of unsupported type\n";
-				continue;
-			}
-			// end of block
-			*m_outfile << "\n";
-
-		}
-        m_outfile->close();
-        delete m_outfile;
-        m_outfile = nullptr;
-	}
+	openvdb::io::File(fileName).write({testGrid}); // TODO: Write velocity and id grids here
 }

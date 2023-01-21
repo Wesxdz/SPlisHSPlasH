@@ -27,6 +27,7 @@ def main():
 	base.setValueString(base.PARTICLE_EXPORT_ATTRIBUTES, "velocity;density")
 	base.activateExporter("Partio Exporter", False)
 	base.activateExporter("VTK Exporter", False)
+	base.activateExporter("OpenVDB Exporter", False)
 	base.activateExporter("Rigid Body Exporter", False)
 	base.activateExporter("Rigid Body OBJ Exporter", False)	
 	base.activateExporter("Rigid Body VTK Exporter", False)	

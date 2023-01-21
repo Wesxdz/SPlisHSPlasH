@@ -4,8 +4,9 @@
 #include "ExporterBase.h"
 #include "SPlisHSPlasH/FluidModel.h"
 #include <fstream>
+#include <openvdb/openvdb.h>
 
-namespace OpenVDB
+namespace SPH
 {
 	/** \brief Particle exporter for the OpenVDB format.
 	*/
@@ -14,9 +15,7 @@ namespace OpenVDB
 	protected: 
 		std::string m_exportPath;
 		std::ofstream *m_outfile;
-		std::vector<std::string> m_attributes;
-
-		void createParticleFile(const std::string& fileName, FluidModel* model);
+		
 		void writeParticles(const std::string& fileName, FluidModel* model, const unsigned int objId = 0xffffffff);
 
 	public:
@@ -28,7 +27,8 @@ namespace OpenVDB
 		virtual void init(const std::string& outputPath);
 		virtual void step(const unsigned int frame);
 		virtual void reset();
-		virtual void setActive(const bool active); 
+		virtual void setActive(const bool active);
+
 	};
 }
 

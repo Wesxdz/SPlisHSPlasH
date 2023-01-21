@@ -287,7 +287,7 @@ target_include_directories(SPlisHSPlasH PUBLIC
 )
 
 target_link_libraries(SPlisHSPlasH
-	PUBLIC Utilities tinyexpr
+	PUBLIC Utilities tinyexpr openvdb
 	INTERFACE
 	${NEIGHBORHOOD_SEARCH_LIBRARIES}
 	${DISCREGRID_LIBRARIES}
